@@ -35,6 +35,7 @@ const game = require('./util/matchingGame');
 let player = {};
 let waitingPlayer = [];
 const gameLobbyA = 'lobby_a';
+//TODO redis에서 scan 한 후 마지막 값 + 1로 초기화
 var roomKey = 0;
 
 app.get('/', function (req, res) {
@@ -59,6 +60,8 @@ matchingSpace.on('connection', function (socket) {
                     });
 
                     let selectQuery = "SELECT * FROM players WHERE nickname='" + data.nickname + "'";
+
+                    //TODO error when can't bring data
 
                     connection.query(selectQuery, function (err, result, field) {
                         if (err) {
