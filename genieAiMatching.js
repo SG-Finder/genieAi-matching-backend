@@ -8,6 +8,7 @@ const moment =  require('moment');
 const matchingSpace = io.of('/matching');
 
 //redis module
+
 const redis = require('redis');
 const redisClient = redis.createClient(6379, '127.0.0.1');
 redisClient.auth('tmakdlfrpdlxm');
@@ -35,8 +36,7 @@ const game = require('./util/matchingGame');
 let player = {};
 let waitingPlayer = [];
 const gameLobbyA = 'lobby_a';
-//TODO redis에서 scan 한 후 마지막 값 + 1로 초기화
-var roomKey = 0;
+let roomKey = 0;
 
 app.get('/', function (req, res) {
     res.sendFile(__dirname + '/index.html');
@@ -133,9 +133,10 @@ matchingSpace.on('connection', function (socket) {
         }
     });
 
-    //TODO develop cancel matching
     socket.on('cancelMatching', function (data) {
-
+        socket.emit('cancelMatchingResult', {
+            success: true
+        });
     });
 
     socket.on('sendMessage', function (msg) {
