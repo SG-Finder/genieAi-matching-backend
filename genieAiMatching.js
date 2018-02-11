@@ -12,6 +12,9 @@ const matchingSpace = io.of('/matching');
 const redis = require('redis');
 const redisClient = redis.createClient(6379, '192.168.0.60');
 redisClient.auth('tmakdlfrpdlxm');
+const redisSetStructure = require('redis-set');
+const waitMatchingKey = 'waitMatchingPlayer';
+const redisSetClient = redisSetStructure.create(waitMatchingKey, redisClient);
 
 // DB module
 const mysql = require('mysql');
@@ -151,7 +154,17 @@ matchingSpace.on('connection', function (socket) {
         //TODO 클러스터링을 위해 매칭 대기 큐를 redis set 구조로 옮긴다
         //TODO 매칭 결과 데이터에 중복된 플레이어가 있을 경우의 이슈 처리(나 자신과의 싸움)
         //TODO PlayerId 와 룸키가 같은 사람이 방장
-        redisClient.sadd("waitMatchingSet", player[socket.id].nickname);
+        //console.log("redis test :" + redisClient.sismember("waitMatchingSet", console.log));
+        redisClient.smembers(waitMatchingKey, function (err, list) {
+            console.log(list);
+            if (list.length === 0) {
+                redisClient.sadd(waitMatchingKey, player[socket.id].nickname);
+            }
+            else {
+                //console.log(list.pop());
+                redisClient.srem(waitMatchingKey, list.pop());
+            }
+        });
     });
 
     socket.on('cancelMatching', function (data) {
