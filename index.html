@@ -17,11 +17,11 @@
             });
 
             $('#login').submit(function(){
-                conn.emit("ack", {session_token:"Z2tzeG9kbmQwMDcxNTE3Nzk2MTA2MDM0", nickname: $('#InputLogin').val()});
+                conn.emit("ack", {session_token:"Z2tzeG9kbjE1MTgzNTc5MTgxNjU=", nickname: $('#InputLogin').val()});
                 return false;
             });
             $('#login2').submit(function(){
-                conn.emit("ack", {session_token:"Z2tzeG9kbmQwMDE1MTc3OTYxMjc2NjA=", nickname: $('#InputLogin2').val()});
+                conn.emit("ack", {session_token:"Z2tzeG9kbmQxMjM1NjE1MTgzNTg1NDAwMDU=", nickname: $('#InputLogin2').val()});
                 return false;
             });
             $('#ready').submit(function(){
@@ -51,16 +51,17 @@
                 console.log("doesn't have authorization");
             })
             conn.on('entry', function(data) {
-                console.log(data);
+                console.log(JSON.parse(data));
             })
             conn.on('leave', function (data) {
-                console.log(data);
+                console.log(JSON.parse(data));
             })
             conn.on('retryReady', function (data) {
                 console.log(data);
             })
             conn.on('receiveMessage', function (data) {
-                console.log(data.from + " : " + data.message);
+                jsonObject = JSON.parse(data);
+                console.log(jsonObject.from + " : " + jsonObject.message);
             })
             conn.on('')
         });
