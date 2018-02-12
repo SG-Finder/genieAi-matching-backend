@@ -59,13 +59,13 @@ subscriber.on('message', function (channel, message) {
     console.log("Message '" + message + "' on channel '" + channel + "' arrived!");
     switch (statusMessageMachine) {
         case subscribeMessageType.CHAT_MESSAGE:
-            matchingSpace.to(gameLobbyA).emit('receiveMessage', message);
+            matchingSpace.to(gameLobbyA).emit('receiveMessage', JSON.parse(message));
             break;
         case subscribeMessageType.ENTRY_MESSAGE:
-            matchingSpace.to(gameLobbyA).emit('entry', message);
+            matchingSpace.to(gameLobbyA).emit('entry', JSON.parse(message));
             break;
         case subscribeMessageType.LEAVE_MESSAGE:
-            matchingSpace.to(gameLobbyA).emit('leave', message);
+            matchingSpace.to(gameLobbyA).emit('leave', JSON.parse(message));
             break;
         case subscribeMessageType.MATCHING_SUCCESS_MESSAGE:
             let matchingData = JSON.parse(message);
@@ -74,8 +74,8 @@ subscriber.on('message', function (channel, message) {
             delete matchingData.playerSocketId;
             delete matchingData.opponentPlayerSocketId;
 
-            matchingSpace.to(playerA).emit('matchingResult', JSON.stringify(matchingData));
-            matchingSpace.to(playerB).emit('matchingResult', JSON.stringify(matchingData));
+            matchingSpace.to(playerA).emit('matchingResult', matchingData);
+            matchingSpace.to(playerB).emit('matchingResult', matchingData);
             break;
         default :
             console.log("status machine error");
