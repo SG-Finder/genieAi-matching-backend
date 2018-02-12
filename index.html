@@ -7,7 +7,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="http://code.jquery.com/jquery-1.11.1.js"></script>
     <script>
-        var conn = io.connect('http://192.168.0.60:3000/matching');
+        var conn = io.connect('http://localhost:3000/matching');
         $(document).ready(function(){
             $('#form').submit(function(){
                 conn.emit('sendMessage', { message: $('#Input').val() });
@@ -39,7 +39,7 @@
                 console.log(data);
             });
             conn.on('matchingResult', function (data) {
-                console.log(data);
+                console.log(JSON.parse(data));
                 conn.disconnect();
             });
 
