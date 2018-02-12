@@ -163,13 +163,22 @@ matchingSpace.on('connection', function (socket) {
         //TODO 매칭 결과 데이터에 중복된 플레이어가 있을 경우의 이슈 처리(나 자신과의 싸움)
         player[socket.id].matchingActivate = true;
         redisClient.smembers(waitMatchingKey, function (err, list) {
+            if (err) {
+                socket.emit('waitMatching', {
+                    success: false
+                });
+                throw err;
+            }
             console.log(list);
             if (list.length === 0) {
                 redisClient.sadd(waitMatchingKey, JSON.stringify({
                    playerNickname: player[socket.id].nickname,
                    playerSocketId: socket.id
                 }));
-        }
+                socket.emit('waitMatching', {
+                    success: true
+                })
+            }
             else {
                 let opponentPlayer = JSON.parse(list.pop());
                 let matchingResultData = {
@@ -192,6 +201,9 @@ matchingSpace.on('connection', function (socket) {
                 playerSocketId: socket.id
             }), function (err, result) {
                 if (err) {
+                    socket.emit('cancelMatchingResult', {
+                        success: false
+                    });
                     throw err;
                 }
                 socket.emit('cancelMatchingResult', {
