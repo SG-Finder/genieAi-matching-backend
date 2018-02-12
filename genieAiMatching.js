@@ -12,7 +12,6 @@ const matchingSpace = io.of('/matching');
 const redis = require('redis');
 const redisClient = redis.createClient(6379, '192.168.0.60');
 redisClient.auth('tmakdlfrpdlxm');
-const redisSetStructure = require('redis-set');
 const waitMatchingKey = 'waitMatchingPlayer';
 
 // DB module
