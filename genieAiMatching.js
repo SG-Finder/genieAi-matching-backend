@@ -228,7 +228,11 @@ matchingSpace.on('connection', function (socket) {
         if (player[socket.id] !== undefined ) {
             socket.leave(gameLobbyA, function () {
                 statusMessageMachine = subscribeMessageType.LEAVE_MESSAGE;
-                redisClient.publish(gameLobbyA, player[socket.id].nickname);
+                redisClient.publish(gameLobbyA, JSON.stringify({
+                    leaveUser: player[socket.id].nickname,
+                    leaveUserScore: player[socket.id].score,
+                    leaveUserTier: player[socket.id].tier
+                }));
                 console.log(player);
                 //SET에서 삭제
                 if (player[socket.id].matchingActivate === true) {
