@@ -17,7 +17,7 @@
             });
 
             $('#login').submit(function(){
-                conn.emit("ack", {session_token:"Z2tzeG9kbmQxMjM1NjE1MTg0MDc2NzQ0MzY=", nickname: $('#InputLogin').val()});
+                conn.emit("ack", {session_token:"Z2tzeG9kbjE1MTg0MTYyMzk3MTE=", nickname: $('#InputLogin').val()});
                 return false;
             });
             $('#login2').submit(function(){
@@ -39,7 +39,7 @@
                 console.log(data);
             });
             conn.on('matchingResult', function (data) {
-                console.log(JSON.parse(data));
+                console.log(data);
                 conn.disconnect();
             });
 
@@ -51,16 +51,16 @@
                 console.log("doesn't have authorization");
             })
             conn.on('entry', function(data) {
-                console.log(JSON.parse(data));
+                console.log(data);
             })
             conn.on('leave', function (data) {
-                console.log(JSON.parse(data));
+                console.log(data);
             })
             conn.on('retryReady', function (data) {
                 console.log(data);
             })
             conn.on('receiveMessage', function (data) {
-                jsonObject = JSON.parse(data);
+                jsonObject = data;
                 console.log(jsonObject.from + " : " + jsonObject.message);
             })
             conn.on('')
