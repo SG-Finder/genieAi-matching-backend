@@ -3,6 +3,7 @@ exports.isValidSession = function (redisClient, key, fn) {
     redisClient.get(key, function (err, data) {
         if (err) {
             console.log(err + ": isValidSession function err");
+            return;
         }
 
         if( data !== null ) {
@@ -18,6 +19,7 @@ exports.findSessionData = function(redisClient, key, fn) {
     redisClient.get(key, function (err, data) {
         if (err) {
             console.log(err + ": findSessionData function err");
+            return;
         }
         fn(data);
     })

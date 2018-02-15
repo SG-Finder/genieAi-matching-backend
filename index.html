@@ -7,7 +7,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="http://code.jquery.com/jquery-1.11.1.js"></script>
     <script>
-        var conn = io.connect('http://192.168.0.13:9406/matching');
+        var conn = io.connect('http://localhost:3000/matching');
         $(document).ready(function(){
             $('#form').submit(function(){
                 conn.emit('sendMessage', { message: $('#Input').val() });
@@ -17,11 +17,11 @@
             });
 
             $('#login').submit(function(){
-                conn.emit("ack", {session_token:"Z2tzeG9kbjE1MTg1MDE3NTM1MjE=", nickname: $('#InputLogin').val()});
+                conn.emit("ack", {session_token:"Z2tzeG9kbmQxMjM1NjE1MTg2NzcyOTI2MDQ=", nickname: $('#InputLogin').val()});
                 return false;
             });
             $('#login2').submit(function(){
-                conn.emit("ack", {session_token:"Z2tzeG9kbmQxMjM1NjE1MTg1MDE5MTIzMzI=", nickname: $('#InputLogin2').val()});
+                conn.emit("ack", {session_token:"Z2tzeG9kbjE1MTg2NzczNTY5Njc=", nickname: $('#InputLogin2').val()});
                 return false;
             });
             $('#ready').submit(function(){

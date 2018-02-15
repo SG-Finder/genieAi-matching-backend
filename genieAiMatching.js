@@ -1,23 +1,18 @@
-// Core module
 const express = require('express');
 const app = express();
 const server = require('http').createServer(app);
 const io = require('socket.io').listen(server);
-const port = process.env.PORT || 3000;
 const moment =  require('moment');
-const matchingSpace = io.of('/matching');
-
-//redis module
-
+const mysql = require('mysql');
 const redis = require('redis');
-const redisClient = redis.createClient(6379, '192.168.0.60');
-redisClient.auth('tmakdlfrpdlxm');
+
+const sessionManage = require('./redis_dao/session');
+
+const matchingSpace = io.of('/matching');
+const port = process.env.PORT || 3000;
 const waitMatchingKey = 'waitMatchingPlayer';
 
-// DB module
-const mysql = require('mysql');
-
-//Todo make connection pool and then manage them
+//TODO make connection pool and then manage them
 const connection = mysql.createConnection(require('./db/db_info'));
 connection.connect(function (err) {
     try {
@@ -27,14 +22,9 @@ connection.connect(function (err) {
         console.log('connect error to mysql server');
     }
 });
-
-// Customizing module
-const sessionManage = require('./redis_dao/session');
-
-// Util
-const game = require('./util/matchingGame');
 let player = {};
-let waitingPlayer = [];
+
+// pub/sub channel
 const gameLobbyA = 'lobby_a';
 
 // Status machine
@@ -47,45 +37,22 @@ const subscribeMessageType = {
 
 let statusMessageMachine = 0;
 
-app.get('/', function (req, res) {
-    res.sendFile(__dirname + '/index.html');
-});
+const redisClient = redis.createClient(6379, '192.168.0.60');
+redisClient.auth('tmakdlfrpdlxm');
+
 // Subscribe lobby_a channel
 const subscriber = redis.createClient(6379, '192.168.0.60');
 subscriber.auth('tmakdlfrpdlxm');
 subscriber.subscribe(gameLobbyA);
 
-subscriber.on('message', function (channel, message) {
-    console.log("Message '" + message + "' on channel '" + channel + "' arrived!");
-    switch (statusMessageMachine) {
-        case subscribeMessageType.CHAT_MESSAGE:
-            matchingSpace.to(gameLobbyA).emit('receiveMessage', JSON.parse(message));
-            break;
-        case subscribeMessageType.ENTRY_MESSAGE:
-            matchingSpace.to(gameLobbyA).emit('entry', JSON.parse(message));
-            break;
-        case subscribeMessageType.LEAVE_MESSAGE:
-            matchingSpace.to(gameLobbyA).emit('leave', JSON.parse(message));
-            break;
-        case subscribeMessageType.MATCHING_SUCCESS_MESSAGE:
-            let matchingData = JSON.parse(message);
-            let playerA = matchingData.playerSocketId;
-            let playerB = matchingData.opponentPlayerSocketId;
-            delete matchingData.playerSocketId;
-            delete matchingData.opponentPlayerSocketId;
-
-            matchingSpace.to(playerA).emit('matchingResult', matchingData);
-            matchingSpace.to(playerB).emit('matchingResult', matchingData);
-            break;
-        default :
-            console.log("status machine error");
-    }
+// router
+app.get('/', function (req, res) {
+    res.sendFile(__dirname + '/index.html');
 });
 
 // Socket connection
 matchingSpace.on('connection', function (socket) {
     console.log("someone connects this server");
-
     socket.on('ack', function (data) {
         console.log(data);
         //TODO BAD REQUEST EXCEPTION
@@ -101,10 +68,11 @@ matchingSpace.on('connection', function (socket) {
                         afterEvent : "none"
                     });
 
-                    let selectQuery = "SELECT * FROM players WHERE nickname='" + data.nickname + "'";
+                    let selectQuery = "SELECT players.id, players.nickname, players.point, players.score, players.tier, weapons.name " +
+                        "FROM players, weapon_relation, weapons " +
+                        "WHERE players.id=weapon_relation.player_id and weapon_relation.weapon_id=weapons.id and players.nickname='" + data.nickname + "'";
 
                     //TODO error when can't bring data
-
                     connection.query(selectQuery, function (err, result, field) {
                         if (err) {
                             socket.emit('getData', {
@@ -114,10 +82,18 @@ matchingSpace.on('connection', function (socket) {
                             console.log(err);
                             throw err;
                         }
+                        console.log(result[0]);
 
+                        let weapon = [];
+                        for (let i = 0; i < result.length; i++) {
+                            weapon[weapon.length] = result[i].name;
+                        }
+                        delete result[0].name;
                         player[socket.id] = result[0];
+                        player[socket.id].weapon = weapon;
                         player[socket.id].socket_id = socket.id;
                         player[socket.id].matchingActivate = false;
+                        console.log(player[socket.id]);
                         //connection.end();
                         socket.emit('getData', {
                             dataAccess : true,
@@ -139,8 +115,6 @@ matchingSpace.on('connection', function (socket) {
 
     socket.on('ready', function (data) {
         //TODO delete event it is just testing event
-        console.log(player[socket.id]);
-
         if (player[socket.id] == null) {
             socket.emit('retryReady', { error: "connection DB is fail"});
             return;
@@ -158,8 +132,7 @@ matchingSpace.on('connection', function (socket) {
 
     socket.on('gameStart', function () {
         //TODO modulation && 동시에 접속했을 때의 이슈 && 매칭이 실패했을 때의 이슈 && 사용자의 수락 이벤트 핸들러
-        //TODO 매칭 결과 redis에 저장
-        //TODO 클러스터링을 위해 매칭 대기 큐를 redis set 구조로 옮긴다
+        //TODO 1:1 이상의 매칭 구현
         //TODO 매칭 결과 데이터에 중복된 플레이어가 있을 경우의 이슈 처리(나 자신과의 싸움)
         player[socket.id].matchingActivate = true;
         redisClient.smembers(waitMatchingKey, function (err, list) {
@@ -169,27 +142,22 @@ matchingSpace.on('connection', function (socket) {
                 });
                 throw err;
             }
-            console.log(list);
             if (list.length === 0) {
-                redisClient.sadd(waitMatchingKey, JSON.stringify({
-                   playerNickname: player[socket.id].nickname,
-                   playerSocketId: socket.id
-                }));
+                redisClient.sadd(waitMatchingKey, JSON.stringify(player[socket.id]));
                 socket.emit('waitMatching', {
                     success: true
                 })
             }
             else {
+                console.log(list[0]);
                 let opponentPlayer = JSON.parse(list.pop());
-                let matchingResultData = {
-                    playersId: [opponentPlayer.playerNickname, player[socket.id].nickname],
-                    playerSocketId: socket.id,
-                    opponentPlayerSocketId: opponentPlayer.playerSocketId,
+                let saveRedisMatchingData = {
+                    playersInfo: [player[socket.id], opponentPlayer],
                     roomId: player[socket.id].id
                 };
                 redisClient.srem(waitMatchingKey, JSON.stringify(opponentPlayer));
                 statusMessageMachine = subscribeMessageType.MATCHING_SUCCESS_MESSAGE;
-                redisClient.publish(gameLobbyA, JSON.stringify(matchingResultData));
+                redisClient.publish(gameLobbyA, JSON.stringify(saveRedisMatchingData));
             }
         });
     });
@@ -200,15 +168,19 @@ matchingSpace.on('connection', function (socket) {
                 playerNickname: player[socket.id].nickname,
                 playerSocketId: socket.id
             }), function (err, result) {
-                if (err) {
+                try {
+                    console.log(result);
+                    player[socket.id].matchingActivate = false;
                     socket.emit('cancelMatchingResult', {
                         success: false
                     });
-                    throw err;
                 }
-                socket.emit('cancelMatchingResult', {
-                    success: true
-                });
+                catch(err) {
+                    console.log(err);
+                    socket.emit('cancelMatchingResult', {
+                        success: true
+                    });
+                }
             });
         }
     });
@@ -223,28 +195,65 @@ matchingSpace.on('connection', function (socket) {
     });
 
     socket.on('disconnect', function (reason) {
-        //console.log(reason);
         console.log('somenoe disconnect this server');
         if (player[socket.id] !== undefined ) {
             socket.leave(gameLobbyA, function () {
+                console.log(player);
+                //Redis Matching Set에서 삭제
+                if (player[socket.id].matchingActivate === true) {
+                    redisClient.srem(waitMatchingKey, JSON.stringify(player[socket.id]), function (err, result) {
+                        try {
+                            console.log(result);
+                        }
+                        catch (err) {
+                            console.log(err);
+                        }
+                    });
+                }
                 statusMessageMachine = subscribeMessageType.LEAVE_MESSAGE;
                 redisClient.publish(gameLobbyA, JSON.stringify({
                     leaveUser: player[socket.id].nickname,
                     leaveUserScore: player[socket.id].score,
                     leaveUserTier: player[socket.id].tier
                 }));
-                console.log(player);
-                //SET에서 삭제
-                if (player[socket.id].matchingActivate === true) {
-                    redisClient.srem(waitMatchingKey, JSON.stringify({
-                        playerNickname: player[socket.id].nickname,
-                        playerSocketId: socket.id
-                    }));
-                }
                 delete player[socket.id];
             });
         }
     });
+});
+
+subscriber.on('message', function (channel, message) {
+    console.log("Message '" + message + "' on channel '" + channel + "' arrived!");
+    switch (statusMessageMachine) {
+        case subscribeMessageType.CHAT_MESSAGE:
+            matchingSpace.to(gameLobbyA).emit('receiveMessage', JSON.parse(message));
+            break;
+        case subscribeMessageType.ENTRY_MESSAGE:
+            matchingSpace.to(gameLobbyA).emit('entry', JSON.parse(message));
+            break;
+        case subscribeMessageType.LEAVE_MESSAGE:
+            matchingSpace.to(gameLobbyA).emit('leave', JSON.parse(message));
+            break;
+        case subscribeMessageType.MATCHING_SUCCESS_MESSAGE:
+            let matchingData = JSON.parse(message);
+            let players = [];
+            for (let i = 0; i < matchingData.playersInfo.length; i++) {
+                players[players.length] = matchingData.playersInfo[i].nickname;
+            }
+            for (let i = 0; i < matchingData.playersInfo.length; i++) {
+                matchingSpace.to(matchingData.playersInfo[i].socket_id).emit('matchingResult', {
+                    playersId: players,
+                    roomId: matchingData.roomId
+                });
+                delete matchingData.playersInfo[i].matchingActivate;
+                delete matchingData.playersInfo[i].socket_id;
+            }
+            console.log(matchingData);
+            redisClient.HMSET("roomId", matchingData.roomId, JSON.stringify(matchingData));
+            break;
+        default:
+            break;
+    }
 });
 
 server.listen(port, function () {
