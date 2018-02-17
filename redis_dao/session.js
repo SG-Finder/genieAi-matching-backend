@@ -1,37 +1,39 @@
 exports.isValidSession = function (redisClient, key, fn) {
     console.log("key value : " +  key);
     redisClient.get(key, function (err, data) {
-        if (err) {
+        try {
+            if( data !== null ) {
+                fn (true);
+            }
+            else {
+                fn (false);
+            }
+        }
+        catch(err) {
             console.log(err + ": isValidSession function err");
-            return;
-        }
-
-        if( data !== null ) {
-            fn (true);
-        }
-        else {
-            fn (false);
+            fn(false);
         }
     });
 };
 
 exports.findSessionData = function(redisClient, key, fn) {
     redisClient.get(key, function (err, data) {
-        if (err) {
-            console.log(err + ": findSessionData function err");
-            return;
+        try {
+            fn(data);
         }
-        fn(data);
-    })
+        catch(err) {
+            console.log(err + ": findSessionData function err");
+        }
+    });
 };
 
 exports.updateSession = function (redisClient, key, value) {
     redisClient.set(key, value, function (err, data) {
-        if (err) {
-            console.log(err + ": updateSession function err");
-        }
-        else {
+        try {
             redisClient.expire(key, 3600);
+        }
+        catch(err) {
+            console.log(err + ": updateSession function err");
         }
     })
 };

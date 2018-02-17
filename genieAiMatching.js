@@ -97,11 +97,13 @@ matchingSpace.on('connection', function (socket) {
                                     });
                                 }
                                 catch(err) {
+                                    //TODO docs에 남기기
                                     socket.emit('getData', {
                                         dataAccess : false,
+                                        message: "Not found player, please check your nickname",
                                         afterEvent : "disconnect"
                                     });
-                                    console.log(err);
+                                    console.error(err);
                                 }
                                 finally {
                                     //connection 반환
@@ -110,7 +112,8 @@ matchingSpace.on('connection', function (socket) {
                             });
                         }
                         catch(err) {
-                            console.log(err);
+                            connection.destroy();
+                            console.error(err);
                         }
 
                     });
@@ -119,6 +122,7 @@ matchingSpace.on('connection', function (socket) {
             else {
                 socket.emit('authorized', {
                     permit : false,
+                    message : "Expired your session token",
                     afterEvent : "disconnect"
                 });
                 socket.disconnect();
@@ -146,7 +150,6 @@ matchingSpace.on('connection', function (socket) {
 
     socket.on('gameStart', function (data) {
         //TODO modulation && 동시에 접속했을 때의 이슈 && 매칭이 실패했을 때의 이슈 && 사용자의 수락 이벤트 핸들러
-        //TODO 1:1 이상의 매칭 구현
         //TODO 매칭 결과 데이터에 중복된 플레이어가 있을 경우의 이슈 처리(나 자신과의 싸움)
         let MATCHING_QUE;
         player[socket.id].matchingActivate = true;
@@ -174,33 +177,35 @@ matchingSpace.on('connection', function (socket) {
         player[socket.id].matchingQue = MATCHING_QUE;
 
         redisClient.smembers(MATCHING_QUE, function (err, list) {
-            if (err) {
+            try {
+                if (list.length < data.numOfPlayer - 1) {
+                    redisClient.sadd(MATCHING_QUE, JSON.stringify(player[socket.id]));
+                    socket.emit('waitMatching', {
+                        success: true
+                    })
+                }
+                else if (list.length === (data.numOfPlayer - 1)) {
+                    let matchingPlayer = [];
+                    matchingPlayer[matchingPlayer.length] = player[socket.id];
+                    for (let i = 0; i < (data.numOfPlayer - 1); i++) {
+                        matchingPlayer[matchingPlayer.length] = JSON.parse(list.pop());
+                        redisClient.srem(MATCHING_QUE, JSON.stringify(matchingPlayer[i]));
+                    }
+
+                    let saveRedisMatchingData = {
+                        playersInfo: matchingPlayer,
+                        roomId: player[socket.id].roomKey
+                        //roomId 생성 (socket.id값으로 인코딩 하기)
+                    };
+                    statusMessageMachine = subscribeMessageType.MATCHING_SUCCESS_MESSAGE;
+                    redisClient.publish(gameLobbyA, JSON.stringify(saveRedisMatchingData));
+                }
+            }
+            catch(err) {
+                console.log(err);
                 socket.emit('waitMatching', {
                     success: false
                 });
-                throw err;
-            }
-            if (list.length < data.numOfPlayer - 1) {
-                redisClient.sadd(MATCHING_QUE, JSON.stringify(player[socket.id]));
-                socket.emit('waitMatching', {
-                    success: true
-                })
-            }
-            else if (list.length === (data.numOfPlayer - 1)) {
-                let matchingPlayer = [];
-                matchingPlayer[matchingPlayer.length] = player[socket.id];
-                for (let i = 0; i < (data.numOfPlayer - 1); i++) {
-                    matchingPlayer[matchingPlayer.length] = JSON.parse(list.pop());
-                    redisClient.srem(MATCHING_QUE, JSON.stringify(matchingPlayer[i]));
-                }
-
-                let saveRedisMatchingData = {
-                    playersInfo: matchingPlayer,
-                    roomId: player[socket.id].roomKey
-                    //roomId 생성 (socket.id값으로 인코딩 하기)
-                };
-                statusMessageMachine = subscribeMessageType.MATCHING_SUCCESS_MESSAGE;
-                redisClient.publish(gameLobbyA, JSON.stringify(saveRedisMatchingData));
             }
         });
     });
@@ -245,7 +250,7 @@ matchingSpace.on('connection', function (socket) {
                         try {
                             console.log(result);
                         }
-                        catch (err) {
+                        catch(err) {
                             console.log(err);
                         }
                     });
