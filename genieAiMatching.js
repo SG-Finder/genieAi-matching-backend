@@ -18,15 +18,8 @@ const waitMatchingKey = {
 };
 
 //TODO make connection pool and then manage them
-const connection = mysql.createConnection(require('./db-configs/mysql-config'));
-connection.connect(function (err) {
-    try {
-        console.log('connect mysql server');
-    }
-    catch (err) {
-        console.log('connect error to mysql server');
-    }
-});
+const dbConnectionPool = mysql.createPool(require('./db-configs/mysql-config'));
+
 let player = {};
 
 // pub-sub channel
@@ -79,33 +72,47 @@ matchingSpace.on('connection', function (socket) {
                         "WHERE players.id=weapon_relation.player_id and weapon_relation.weapon_id=weapons.id and players.nickname='" + data.nickname + "'";
 
                     //TODO error when can't bring data
-                    connection.query(selectQuery, function (err, result, field) {
-                        if (err) {
-                            socket.emit('getData', {
-                                dataAccess : false,
-                                afterEvent : "disconnect"
-                            });
-                            console.log(err);
-                            throw err;
-                        }
-                        console.log(result[0]);
+                    dbConnectionPool.getConnection(function (err, connection) {
+                        try {
+                            console.log('success db connect');
+                            connection.query(selectQuery, function (err, result) {
+                                try {
+                                    console.log(result[0]);
+                                    let weapon = [];
+                                    for (let i = 0; i < result.length; i++) {
+                                        weapon[weapon.length] = result[i].name;
+                                    }
+                                    delete result[0].name;
+                                    player[socket.id] = result[0];
+                                    player[socket.id].weapon = weapon;
+                                    player[socket.id].socket_id = socket.id;
+                                    player[socket.id].matchingActivate = false;
+                                    player[socket.id].roomKey = Math.trunc(baseConvert.fromBase64(socket.id.split('#')[1]) / Math.pow(10, 30));
 
-                        let weapon = [];
-                        for (let i = 0; i < result.length; i++) {
-                            weapon[weapon.length] = result[i].name;
+                                    console.log(player[socket.id]);
+
+                                    socket.emit('getData', {
+                                        dataAccess : true,
+                                        afterEvent : "ready"
+                                    });
+                                }
+                                catch(err) {
+                                    socket.emit('getData', {
+                                        dataAccess : false,
+                                        afterEvent : "disconnect"
+                                    });
+                                    console.log(err);
+                                }
+                                finally {
+                                    //connection 반환
+                                    connection.release();
+                                }
+                            });
                         }
-                        delete result[0].name;
-                        player[socket.id] = result[0];
-                        player[socket.id].weapon = weapon;
-                        player[socket.id].socket_id = socket.id;
-                        player[socket.id].matchingActivate = false;
-                        player[socket.id].roomKey = Math.trunc(baseConvert.fromBase64(socket.id.split('#')[1]) / Math.pow(10, 30));
-                        console.log(player[socket.id]);
-                        //connection.end();
-                        socket.emit('getData', {
-                            dataAccess : true,
-                            afterEvent : "ready"
-                        });
+                        catch(err) {
+                            console.log(err);
+                        }
+
                     });
                 });
             }
