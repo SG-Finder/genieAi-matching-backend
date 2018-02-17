@@ -17,7 +17,7 @@
             });
 
             $('#login').submit(function(){
-                conn.emit("ack", {session_token:"Z2tzeG9kbmQxMjM1NjE1MTg2NzcyOTI2MDQ=", nickname: $('#InputLogin').val()});
+                conn.emit("ack", {session_token:"Z2tzeG9kbmQwMDE1MTg4NTM1NzI4OTM=", nickname: $('#InputLogin').val()});
                 return false;
             });
             $('#login2').submit(function(){
@@ -29,14 +29,15 @@
                 return false;
             });
             $('#gameStart').submit(function(){
-                conn.emit('gameStart', {msg: $('#gameStartBtn').val()});
+                conn.emit('gameStart', {msg: $('#gameStartBtn').val(),
+                                        numOfPlayer: 3});
                 return false;
             });
         });
         conn.on('connect', function () {
 
             conn.on('authorized', function (data) {
-                console.log(data);
+                console.log(data);``
             });
             conn.on('matchingResult', function (data) {
                 console.log(data);

@@ -5,15 +5,20 @@ const io = require('socket.io').listen(server);
 const moment =  require('moment');
 const mysql = require('mysql');
 const redis = require('redis');
-
-const sessionManage = require('./redis_dao/session');
-
+const baseConvert = require('bases');
 const matchingSpace = io.of('/matching');
+const sessionManage = require('./redis_dao/session');
 const port = process.env.PORT || 3000;
-const waitMatchingKey = 'waitMatchingPlayer';
+const waitMatchingKey = {
+    NumOfPlayerTwo : 'waitMatching2',
+    NumOfPlayerThree : 'waitMatching3',
+    NumOfPlayerFour : 'waitMatching4',
+    NumofPlayerFive : 'waitMatching5'
+
+};
 
 //TODO make connection pool and then manage them
-const connection = mysql.createConnection(require('./db/db_info'));
+const connection = mysql.createConnection(require('./db-configs/mysql-config'));
 connection.connect(function (err) {
     try {
         console.log('connect mysql server');
@@ -24,7 +29,7 @@ connection.connect(function (err) {
 });
 let player = {};
 
-// pub/sub channel
+// pub-sub channel
 const gameLobbyA = 'lobby_a';
 
 // Status machine
@@ -36,13 +41,13 @@ const subscribeMessageType = {
 };
 
 let statusMessageMachine = 0;
-
-const redisClient = redis.createClient(6379, '192.168.0.60');
-redisClient.auth('tmakdlfrpdlxm');
+const redisConfig = require('./db-configs/redis-config');
+const redisClient = redis.createClient(redisConfig.port, redisConfig.host);
+redisClient.auth(redisConfig.password);
 
 // Subscribe lobby_a channel
-const subscriber = redis.createClient(6379, '192.168.0.60');
-subscriber.auth('tmakdlfrpdlxm');
+const subscriber = redis.createClient(redisConfig.port, redisConfig.host);
+subscriber.auth(redisConfig.password);
 subscriber.subscribe(gameLobbyA);
 
 // router
@@ -52,7 +57,8 @@ app.get('/', function (req, res) {
 
 // Socket connection
 matchingSpace.on('connection', function (socket) {
-    console.log("someone connects this server");
+    console.log("someone connects this server : " + socket.id);
+    console.log("socket ID conver to base 10 : " + Math.trunc(baseConvert.fromBase64(socket.id.split('#')[1]) / Math.pow(10, 30)));
     socket.on('ack', function (data) {
         console.log(data);
         //TODO BAD REQUEST EXCEPTION
@@ -93,6 +99,7 @@ matchingSpace.on('connection', function (socket) {
                         player[socket.id].weapon = weapon;
                         player[socket.id].socket_id = socket.id;
                         player[socket.id].matchingActivate = false;
+                        player[socket.id].roomKey = Math.trunc(baseConvert.fromBase64(socket.id.split('#')[1]) / Math.pow(10, 30));
                         console.log(player[socket.id]);
                         //connection.end();
                         socket.emit('getData', {
@@ -130,32 +137,61 @@ matchingSpace.on('connection', function (socket) {
         });
     });
 
-    socket.on('gameStart', function () {
+    socket.on('gameStart', function (data) {
         //TODO modulation && 동시에 접속했을 때의 이슈 && 매칭이 실패했을 때의 이슈 && 사용자의 수락 이벤트 핸들러
         //TODO 1:1 이상의 매칭 구현
         //TODO 매칭 결과 데이터에 중복된 플레이어가 있을 경우의 이슈 처리(나 자신과의 싸움)
+        let MATCHING_QUE;
         player[socket.id].matchingActivate = true;
-        redisClient.smembers(waitMatchingKey, function (err, list) {
+        player[socket.id].wantsNumOfplayer = data.numOfPlayer;
+        switch (data.numOfPlayer) {
+            case 2:
+                MATCHING_QUE = waitMatchingKey.NumOfPlayerTwo;
+                break;
+            case 3:
+                MATCHING_QUE = waitMatchingKey.NumOfPlayerThree;
+                break;
+            case 4:
+                MATCHING_QUE = waitMatchingKey.NumOfPlayerFour;
+                break;
+            case 5:
+                MATCHING_QUE = waitMatchingKey.NumofPlayerFive;
+                break;
+            default:
+                socket.emit('matchingError', {
+                    code: 400,
+                    message: "Invalid parameter or limit avaliable player"
+                });
+                return;
+        }
+        player[socket.id].matchingQue = MATCHING_QUE;
+
+        redisClient.smembers(MATCHING_QUE, function (err, list) {
             if (err) {
                 socket.emit('waitMatching', {
                     success: false
                 });
                 throw err;
             }
-            if (list.length === 0) {
-                redisClient.sadd(waitMatchingKey, JSON.stringify(player[socket.id]));
+            if (list.length < data.numOfPlayer - 1) {
+                redisClient.sadd(MATCHING_QUE, JSON.stringify(player[socket.id]));
                 socket.emit('waitMatching', {
                     success: true
                 })
             }
-            else {
-                console.log(list[0]);
-                let opponentPlayer = JSON.parse(list.pop());
+            else if (list.length === (data.numOfPlayer - 1)) {
+                let matchingPlayer = [];
+                matchingPlayer[matchingPlayer.length] = player[socket.id];
+                for (let i = 0; i < (data.numOfPlayer - 1); i++) {
+                    matchingPlayer[matchingPlayer.length] = JSON.parse(list.pop());
+                    redisClient.srem(MATCHING_QUE, JSON.stringify(matchingPlayer[i]));
+                }
+
                 let saveRedisMatchingData = {
-                    playersInfo: [player[socket.id], opponentPlayer],
-                    roomId: player[socket.id].id
+                    playersInfo: matchingPlayer,
+                    roomId: player[socket.id].roomKey
+                    //roomId 생성 (socket.id값으로 인코딩 하기)
                 };
-                redisClient.srem(waitMatchingKey, JSON.stringify(opponentPlayer));
                 statusMessageMachine = subscribeMessageType.MATCHING_SUCCESS_MESSAGE;
                 redisClient.publish(gameLobbyA, JSON.stringify(saveRedisMatchingData));
             }
@@ -164,10 +200,7 @@ matchingSpace.on('connection', function (socket) {
 
     socket.on('cancelMatching', function (data) {
         if (player[socket.id].matchingActivate === true) {
-            redisClient.srem(waitMatchingKey, JSON.stringify({
-                playerNickname: player[socket.id].nickname,
-                playerSocketId: socket.id
-            }), function (err, result) {
+            redisClient.srem(player[socket.id].matchingQue, JSON.stringify(player[socket.id]), function (err, result) {
                 try {
                     console.log(result);
                     player[socket.id].matchingActivate = false;
@@ -201,7 +234,7 @@ matchingSpace.on('connection', function (socket) {
                 console.log(player);
                 //Redis Matching Set에서 삭제
                 if (player[socket.id].matchingActivate === true) {
-                    redisClient.srem(waitMatchingKey, JSON.stringify(player[socket.id]), function (err, result) {
+                    redisClient.srem(player[socket.id].matchingQue, JSON.stringify(player[socket.id]), function (err, result) {
                         try {
                             console.log(result);
                         }
@@ -244,9 +277,12 @@ subscriber.on('message', function (channel, message) {
                 matchingSpace.to(matchingData.playersInfo[i].socket_id).emit('matchingResult', {
                     playersId: players,
                     roomId: matchingData.roomId
+                    //play 인원 정보 추가
                 });
                 delete matchingData.playersInfo[i].matchingActivate;
                 delete matchingData.playersInfo[i].socket_id;
+                delete matchingData.playersInfo[i].matchingQue;
+                delete matchingData.playersInfo[i].wantsNumOfplayer;
             }
             console.log(matchingData);
             redisClient.HMSET("roomId", matchingData.roomId, JSON.stringify(matchingData));
