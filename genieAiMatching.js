@@ -17,7 +17,7 @@ const waitMatchingKey = {
 
 };
 
-//TODO make connection pool and then manage them
+//db connection pool
 const dbConnectionPool = mysql.createPool(require('./db-configs/mysql-config'));
 
 let player = {};
@@ -101,7 +101,7 @@ matchingSpace.on('connection', function (socket) {
                                     socket.emit('getData', {
                                         dataAccess : false,
                                         message: "Not found player, please check your nickname",
-                                        afterEvent : "disconnect"
+                                        afterEvent : "resend `ack` event"
                                     });
                                     console.error(err);
                                 }
@@ -289,8 +289,8 @@ subscriber.on('message', function (channel, message) {
             for (let i = 0; i < matchingData.playersInfo.length; i++) {
                 matchingSpace.to(matchingData.playersInfo[i].socket_id).emit('matchingResult', {
                     playersId: players,
-                    roomId: matchingData.roomId
-                    //play 인원 정보 추가
+                    roomId: matchingData.roomId,
+                    numOfPlayer: (players.length + 1)
                 });
                 delete matchingData.playersInfo[i].matchingActivate;
                 delete matchingData.playersInfo[i].socket_id;
