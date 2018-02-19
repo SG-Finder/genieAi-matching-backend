@@ -218,13 +218,13 @@ matchingSpace.on('connection', function (socket) {
                     console.log(result);
                     player[socket.id].matchingActivate = false;
                     socket.emit('cancelMatchingResult', {
-                        success: false
+                        success: true
                     });
                 }
                 catch(err) {
                     console.log(err);
                     socket.emit('cancelMatchingResult', {
-                        success: true
+                        success: false
                     });
                 }
             });
