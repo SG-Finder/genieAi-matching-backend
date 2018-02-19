@@ -141,9 +141,9 @@ matchingSpace.on('connection', function (socket) {
         socket.join(gameLobbyA, function () {
             statusMessageMachine = subscribeMessageType.ENTRY_MESSAGE;
             redisClient.publish(gameLobbyA, JSON.stringify({
-                entryUser: player[socket.id].nickname,
-                entryUserScore: player[socket.id].score,
-                entryUserTier: player[socket.id].tier
+                user: player[socket.id].nickname,
+                userScore: player[socket.id].score,
+                userTier: player[socket.id].tier
             }));
         });
     });
@@ -258,9 +258,9 @@ matchingSpace.on('connection', function (socket) {
                 }
                 statusMessageMachine = subscribeMessageType.LEAVE_MESSAGE;
                 redisClient.publish(gameLobbyA, JSON.stringify({
-                    leaveUser: player[socket.id].nickname,
-                    leaveUserScore: player[socket.id].score,
-                    leaveUserTier: player[socket.id].tier
+                    user: player[socket.id].nickname,
+                    userScore: player[socket.id].score,
+                    userTier: player[socket.id].tier
                 }));
                 delete player[socket.id];
             });
