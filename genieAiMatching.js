@@ -290,7 +290,7 @@ subscriber.on('message', function (channel, message) {
                 matchingSpace.to(matchingData.playersInfo[i].socket_id).emit('matchingResult', {
                     playersId: players,
                     roomId: matchingData.roomId,
-                    numOfPlayer: (players.length + 1)
+                    numOfPlayer: players.length
                 });
                 delete matchingData.playersInfo[i].matchingActivate;
                 delete matchingData.playersInfo[i].socket_id;
