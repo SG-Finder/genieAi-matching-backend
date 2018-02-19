@@ -296,6 +296,7 @@ subscriber.on('message', function (channel, message) {
                 delete matchingData.playersInfo[i].socket_id;
                 delete matchingData.playersInfo[i].matchingQue;
                 delete matchingData.playersInfo[i].wantsNumOfplayer;
+                delete matchingData.playersInfo[i].roomKey;
             }
             console.log(matchingData);
             redisClient.HMSET("roomId", matchingData.roomId, JSON.stringify(matchingData));
